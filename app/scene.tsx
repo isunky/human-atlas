@@ -27,7 +27,11 @@ export default function AnatomyScene({
   const host = useRef<HTMLDivElement>(null),
     latest = useRef(state),
     select = useRef(onSelect),
-    language = useRef(locale);
+    language = useRef(locale),
+    wake = useRef<() => void>(() => {});
+  useEffect(() => {
+    wake.current();
+  }, [state]);
   language.current = locale;
   useEffect(() => {
     const canvas = host.current?.querySelector("canvas");
@@ -55,6 +59,13 @@ export default function AnatomyScene({
       layoutKey = "",
       amount = 0;
     let lastState: SceneState | null = null;
+    let animate: (time: number) => void = () => {};
+    let lastTime = 0;
+    const requestFrame = () => {
+      if (!disposed && !document.hidden && !frame)
+        frame = requestAnimationFrame((time) => animate(time));
+    };
+    wake.current = requestFrame;
     const abort = new AbortController();
     let renderer: T.WebGLRenderer;
     try {
@@ -94,6 +105,13 @@ export default function AnatomyScene({
     controls.maxPolarAngle = Math.PI * 0.96;
     controls.addEventListener("change", () => {
       dirty = true;
+      requestFrame();
+    });
+    controls.addEventListener("start", () => {
+      requestFrame();
+    });
+    controls.addEventListener("end", () => {
+      requestFrame();
     });
     const pmrem = new T.PMREMGenerator(renderer),
       room = new RoomEnvironment(),
@@ -169,6 +187,16 @@ export default function AnatomyScene({
             new T.Vector3().fromArray(p.bounds[1]),
           ),
       );
+    const directions = new Map(
+      SYSTEMS.map((system, group) => {
+        const angle = (group / SYSTEMS.length) * Math.PI * 2;
+        return [system.id, { x: Math.sin(angle) * 0.48, z: Math.cos(angle) * 0.48 }];
+      }),
+    );
+    const spread = atlas.parts.map((part) => directions.get(part.system)!);
+    let activeParts: number[] = [],
+      hasSolidParts = false,
+      selectedKey = "";
     let packingWidth = 1,
       packingHeight = 1;
     const markerPositions = new Float32Array(atlas.parts.length * 3),
@@ -208,8 +236,11 @@ export default function AnatomyScene({
       bottom: number;
     };
     let targets: Target[] = [];
+    let targetsDirty = true;
+    let refreshTargets = () => {};
     const projected = new T.Vector3();
     const findTarget = (x: number, y: number, radius: number) => {
+      if (targetsDirty) refreshTargets();
       let best = -1,
         score = Infinity;
       for (const t of targets) {
@@ -246,8 +277,7 @@ export default function AnatomyScene({
           "#include <begin_vertex>",
           "#include <begin_vertex>\nvec2 stateUv = vec2((partIndex + 0.5) / stateWidth, 0.5); vec4 state = texture2D(partState, stateUv); transformed += state.xyz; partSelected = texture2D(selectionState, stateUv).r;",
         );
-        shader.fragmentShader =
-          "varying float partSelected;\n" + shader.fragmentShader;
+        shader.fragmentShader = "varying float partSelected;\n" + shader.fragmentShader;
         shader.fragmentShader = shader.fragmentShader.replace(
           "#include <color_fragment>",
           "#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.42, 0.85, 0.78), partSelected * 0.75);",
@@ -320,7 +350,10 @@ export default function AnatomyScene({
         groups.set(p.system, list);
       });
       groups.forEach((gs, system) => {
-        const geometry = mergeGeometries(gs.map((entry) => entry.geometry), false);
+        const geometry = mergeGeometries(
+          gs.map((entry) => entry.geometry),
+          false,
+        );
         if (!geometry) throw new Error("Could not assemble anatomy geometry.");
         geometries.push(geometry);
         const mesh = new T.Mesh(geometry, mats.get(system as never));
@@ -348,6 +381,7 @@ export default function AnatomyScene({
       loaded++;
       onProgress(Math.round((loaded / atlas.chunks.length) * 100));
       dirty = true;
+      requestFrame();
     };
     (async () => {
       try {
@@ -363,6 +397,7 @@ export default function AnatomyScene({
         if (!disposed) {
           ready = true;
           dirty = true;
+          requestFrame();
         }
       } catch (e) {
         if (!disposed) onError(e instanceof Error ? e.message : "Could not load the anatomy.");
@@ -418,6 +453,7 @@ export default function AnatomyScene({
       camera.updateProjectionMatrix();
       renderer.setSize(el.clientWidth, el.clientHeight);
       fit(latest.current.view, amount);
+      requestFrame();
     };
     const observer = new ResizeObserver(resize);
     observer.observe(el);
@@ -426,6 +462,7 @@ export default function AnatomyScene({
       tap = new PointerTap(),
       worldBox = new T.Box3(),
       hitPoint = new T.Vector3();
+    const isolationBounds = new T.Box3();
     const down = (e: PointerEvent) => {
       hover.hidden = true;
       tap.down(e.pointerId, e.clientX, e.clientY, e.pointerType === "touch" ? 12 : 5);
@@ -460,14 +497,12 @@ export default function AnatomyScene({
       raycaster.setFromCamera(pointer, camera);
       let nearest = Infinity,
         found = -1;
-      const hasSolid = atlas.parts.some(
-        (p, i) => p.system !== "integumentary" && data[i * 4 + 3] > 0.5,
-      );
-      pickers.forEach((mesh, i) => {
+      activeParts.forEach((i) => {
+        const mesh = pickers[i];
         if (
           !mesh ||
           data[i * 4 + 3] < 0.5 ||
-          (hasSolid && atlas.parts[i].system === "integumentary")
+          (hasSolidParts && atlas.parts[i].system === "integumentary")
         )
           return;
         worldBox.copy(bounds[i]).translate(mesh.position);
@@ -493,13 +528,13 @@ export default function AnatomyScene({
     renderer.domElement.addEventListener("pointermove", move);
     renderer.domElement.addEventListener("pointerup", up);
     renderer.domElement.addEventListener("pointercancel", cancel);
-    const clock = new T.Clock();
     let lastExtent = -1;
-    const animate = () => {
+    animate = (time) => {
+      frame = 0;
       if (disposed) return;
-      frame = requestAnimationFrame(animate);
-      const dt = Math.min(clock.getDelta(), 0.05),
+      const dt = lastTime ? Math.min((time - lastTime) / 1000, 0.05) : 1 / 60,
         s = latest.current;
+      lastTime = time;
       const changed =
         lastState?.visible !== s.visible ||
         lastState?.selected !== s.selected ||
@@ -507,11 +542,26 @@ export default function AnatomyScene({
       const moving = Math.abs(amount - s.explode) > 0.0001;
       if (moving) {
         amount = T.MathUtils.damp(amount, s.explode, 8, dt);
+        if (Math.abs(amount - s.explode) <= 0.0001) amount = s.explode;
         dirty = true;
       }
-      if (changed || moving || lastExtent < 0) {
+      if (changed) {
+        selectedKey = s.selected.join(",");
         const visible = new Set(s.visible),
           selection = new Set(s.selected);
+        activeParts = [];
+        hasSolidParts = false;
+        atlas.parts.forEach((p, i) => {
+          const selected = selection.has(p.id);
+          const shown = s.isolate ? selected : visible.has(p.system) || selected;
+          partVisibility[i] = shown ? 1 : 0;
+          data[i * 4 + 3] = shown ? 1 : 0;
+          selectedData[i * 4] = selected ? 255 : 0;
+          if (shown) {
+            activeParts.push(i);
+            if (p.system !== "integumentary") hasSolidParts = true;
+          }
+        });
         const visibleParts = atlas.parts.filter((p) =>
           s.isolate ? selection.has(p.id) : visible.has(p.system) || selection.has(p.id),
         );
@@ -528,9 +578,13 @@ export default function AnatomyScene({
           layoutKey = nextLayoutKey;
           if (amount > 0.05 && !s.isolate) fit(s.view, Math.max(0, (amount - 0.3) / 0.7));
         }
+        updateDrawBatches();
+        selectionTexture.needsUpdate = true;
+      }
 
+      if (changed || moving || lastExtent < 0) {
         let markerCount = 0;
-        atlas.parts.forEach((p, i) => {
+        activeParts.forEach((i) => {
           const c = centers[i],
             destination = offsets[i];
           let dx = 0,
@@ -538,30 +592,22 @@ export default function AnatomyScene({
             dz = 0;
           if (amount <= 0.45) {
             const t = amount / 0.45;
-            const group = SYSTEMS.findIndex((sys) => sys.id === p.system);
-            const angle = (group / SYSTEMS.length) * Math.PI * 2;
-            dx = Math.sin(angle) * t * 0.48;
+            dx = spread[i].x * t;
             dy = (c.y - 0.85) * t * 0.28;
-            dz = Math.cos(angle) * t * 0.48;
+            dz = spread[i].z * t;
           } else {
-            const t = (amount - 0.45) / 0.55,
-              group = SYSTEMS.findIndex((sys) => sys.id === p.system),
-              angle = (group / SYSTEMS.length) * Math.PI * 2;
-            dx = T.MathUtils.lerp(Math.sin(angle) * 0.48, destination.x - c.x, t);
+            const t = (amount - 0.45) / 0.55;
+            dx = T.MathUtils.lerp(spread[i].x, destination.x - c.x, t);
             dy = T.MathUtils.lerp((c.y - 0.85) * 0.28, destination.y - c.y, t);
-            dz = T.MathUtils.lerp(Math.cos(angle) * 0.48, -c.z, t);
+            dz = T.MathUtils.lerp(spread[i].z, -c.z, t);
           }
-          const selected = selection.has(p.id);
-          data.set(
-            [dx, dy, dz, (s.isolate ? selected : visible.has(p.system) || selected) ? 1 : 0],
-            i * 4,
-          );
-          selectedData[i * 4] = selected ? 255 : 0;
-          partVisibility[i] = data[i * 4 + 3] > 0.5 ? 1 : 0;
-          if (partVisibility[i]) {
-            markerPositions.set([c.x + dx, c.y + dy, c.z + dz], markerCount * 3);
-            markerCount++;
-          }
+          data[i * 4] = dx;
+          data[i * 4 + 1] = dy;
+          data[i * 4 + 2] = dz;
+          markerPositions[markerCount * 3] = c.x + dx;
+          markerPositions[markerCount * 3 + 1] = c.y + dy;
+          markerPositions[markerCount * 3 + 2] = c.z + dz;
+          markerCount++;
           const mesh = pickers[i];
           if (mesh) {
             mesh.position.set(dx, dy, dz);
@@ -569,12 +615,9 @@ export default function AnatomyScene({
             mesh.updateMatrixWorld(true);
           }
         });
-        // Rebuild indices only when visibility/selection changes or a chunk
-        // arrives. Explosion animation only updates positions and textures.
-        if (changed) updateDrawBatches();
+        // Visibility and selection buffers stay cached throughout the animation.
         markerGeometry.setDrawRange(0, markerCount);
         partTexture.needsUpdate = true;
-        selectionTexture.needsUpdate = true;
         markerGeometry.attributes.position.needsUpdate = true;
         lastState = s;
         lastExtent = amount;
@@ -588,18 +631,17 @@ export default function AnatomyScene({
       if (moving && !s.isolate)
         fit(amount > 0.5 ? "front" : s.view, Math.max(0, (amount - 0.3) / 0.7));
       const isolateKey = s.isolate
-        ? s.selected.join(",") + ":" + s.reset + ":" + s.inspectorOpen + ":" + camera.aspect
+        ? selectedKey + ":" + s.reset + ":" + s.inspectorOpen + ":" + camera.aspect
         : "";
       if (isolateKey !== lastIsolate || (s.isolate && moving)) {
         if (s.isolate) {
-          const box = new T.Box3();
-          atlas.parts.forEach((p, i) => {
-            if (s.selected.includes(p.id))
-              box.union(
-                bounds[i]
-                  .clone()
-                  .translate(new T.Vector3(data[i * 4], data[i * 4 + 1], data[i * 4 + 2])),
-              );
+          const box = isolationBounds.makeEmpty();
+          activeParts.forEach((i) => {
+            box.union(
+              worldBox
+                .copy(bounds[i])
+                .translate(hitPoint.set(data[i * 4], data[i * 4 + 1], data[i * 4 + 2])),
+            );
           });
           if (!box.isEmpty()) {
             const center = box.getCenter(new T.Vector3()),
@@ -676,52 +718,69 @@ export default function AnatomyScene({
       if (controls.autoRotate) dirty = true;
       if (dirty) {
         renderer.render(scene, camera);
-        targets = [];
-        if (amount > 0.45) {
-          const hasSolid = atlas.parts.some(
-            (p, i) => p.system !== "integumentary" && data[i * 4 + 3] > 0.5,
-          );
-          atlas.parts.forEach((p, i) => {
-            if (data[i * 4 + 3] < 0.5 || (hasSolid && p.system === "integumentary")) return;
-            let left = Infinity,
-              right = -Infinity,
-              top = Infinity,
-              bottom = -Infinity;
-            for (let corner = 0; corner < 8; corner++) {
-              projected
-                .set(
-                  p.bounds[corner & 1 ? 1 : 0][0] + data[i * 4],
-                  p.bounds[corner & 2 ? 1 : 0][1] + data[i * 4 + 1],
-                  p.bounds[corner & 4 ? 1 : 0][2] + data[i * 4 + 2],
-                )
-                .project(camera);
-              const x = ((projected.x + 1) * el.clientWidth) / 2,
-                y = ((1 - projected.y) * el.clientHeight) / 2;
-              left = Math.min(left, x);
-              right = Math.max(right, x);
-              top = Math.min(top, y);
-              bottom = Math.max(bottom, y);
-            }
-            projected
-              .copy(centers[i])
-              .add(new T.Vector3(data[i * 4], data[i * 4 + 1], data[i * 4 + 2]))
-              .project(camera);
-            if (projected.z < -1 || projected.z > 1) return;
-            targets.push({
-              index: i,
-              x: ((projected.x + 1) * el.clientWidth) / 2,
-              y: ((1 - projected.y) * el.clientHeight) / 2,
-              left,
-              right,
-              top,
-              bottom,
-            });
-          });
-        }
+        targetsDirty = true;
         dirty = false;
       }
+      if (moving || controls.autoRotate) requestFrame();
+      if (!frame) lastTime = 0;
     };
-    animate();
+    refreshTargets = () => {
+      targetsDirty = false;
+      const screenWidth = el.clientWidth,
+        screenHeight = el.clientHeight;
+      targets = [];
+      if (amount > 0.45) {
+        activeParts.forEach((i) => {
+          const p = atlas.parts[i];
+          if (data[i * 4 + 3] < 0.5 || (hasSolidParts && p.system === "integumentary")) return;
+          let left = Infinity,
+            right = -Infinity,
+            top = Infinity,
+            bottom = -Infinity;
+          for (let corner = 0; corner < 8; corner++) {
+            projected
+              .set(
+                p.bounds[corner & 1 ? 1 : 0][0] + data[i * 4],
+                p.bounds[corner & 2 ? 1 : 0][1] + data[i * 4 + 1],
+                p.bounds[corner & 4 ? 1 : 0][2] + data[i * 4 + 2],
+              )
+              .project(camera);
+            const x = ((projected.x + 1) * screenWidth) / 2,
+              y = ((1 - projected.y) * screenHeight) / 2;
+            left = Math.min(left, x);
+            right = Math.max(right, x);
+            top = Math.min(top, y);
+            bottom = Math.max(bottom, y);
+          }
+          projected
+            .copy(centers[i])
+            .add(hitPoint.set(data[i * 4], data[i * 4 + 1], data[i * 4 + 2]))
+            .project(camera);
+          if (projected.z < -1 || projected.z > 1) return;
+          targets.push({
+            index: i,
+            x: ((projected.x + 1) * screenWidth) / 2,
+            y: ((1 - projected.y) * screenHeight) / 2,
+            left,
+            right,
+            top,
+            bottom,
+          });
+        });
+      }
+    };
+    const visibilityChanged = () => {
+      lastTime = 0;
+      if (document.hidden) {
+        cancelAnimationFrame(frame);
+        frame = 0;
+      } else {
+        dirty = true;
+        requestFrame();
+      }
+    };
+    document.addEventListener("visibilitychange", visibilityChanged);
+    requestFrame();
     const contextLost = (e: Event) => {
       e.preventDefault();
       onError("The 3D session was paused by your device. Reload to continue.");
@@ -731,6 +790,8 @@ export default function AnatomyScene({
       disposed = true;
       abort.abort();
       cancelAnimationFrame(frame);
+      document.removeEventListener("visibilitychange", visibilityChanged);
+      wake.current = () => {};
       observer.disconnect();
       controls.dispose();
       geometries.forEach((g) => g.dispose());

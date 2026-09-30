@@ -57,7 +57,7 @@ This is an educational explorer, not a diagnostic or surgical tool.
 
 ## How it works
 
-Geometry is merged into batches. Visibility changes compact each affected batch's index buffer to submit only visible structures; entirely hidden batches skip drawing. Per-structure GPU textures control translation and selection, while component geometry supports accurate picking. Exploded layouts and point markers include only visible pieces. Rendering updates when the scene changes; orbit controls remain responsive without thousands of separate draw calls.
+Geometry is merged into batches. Visibility changes compact each affected batch's index buffer to submit only visible structures; entirely hidden batches skip drawing. Per-structure GPU textures control translation and selection, while component geometry supports accurate picking. Exploded layouts and point markers include only visible pieces. The animation loop sleeps once movement and camera damping settle, wakes for interaction, state changes, resize or model loading, and pauses while the page is hidden. Explosion animation reuses cached visibility and system directions; screen-space picking bounds are calculated only when pointer interaction needs them.
 
 The optional WebMCP tools expose anatomy search and inspection in compatible browsers. The visible interface works without them.
 
