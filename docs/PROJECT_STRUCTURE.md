@@ -15,6 +15,7 @@
 | `app/rendering/materials.ts` | 系统材质、位置/选择纹理和着色器 |
 | `app/rendering/draw-batches.ts` | 可见索引压紧和绘制范围 |
 | `client/` | 中英文与平台桥接 |
+| `client/content/zh-CN.ts` | 中文阅读引导、基础知识、搜索别名与参考来源 |
 | `src-tauri/` | 原生窗口、权限与打包 |
 
 数据与交互模块不创建 WebGL 上下文。渲染模块不管理 React 状态；资源由场景创建并统一释放。模型 ID、源数据和已有 UI 保持不变。模型转换、压缩与检查脚本继续放在 `scripts/`。

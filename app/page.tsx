@@ -1,10 +1,17 @@
 import { flushSync } from "react-dom";
 import {
+  READING_GUIDE,
+  DIRECTION_TERMS,
+  CONTENT_REFERENCES,
+  chineseStructureKnowledge,
+} from "../client/content/zh-CN";
+import {
   text,
   displayName,
   searchText,
   systemName,
   chineseExplanation,
+  hasChineseExplanation,
   readLocale,
   errorText,
   LANGUAGE_STORAGE_KEY,
@@ -609,10 +616,19 @@ export default function Home() {
                   : explanation(chosen.name, selected.system)
                 : ""}
             </SheetDescription>
-            {chosen && !EXPLANATIONS[chosen.name.toLowerCase()] && (
-              <span className="context-note">
-                {t("System overview · structure identified from source anatomy")}
-              </span>
+            {chosen &&
+              !(locale === "zh-CN"
+                ? hasChineseExplanation(chosen.name)
+                : EXPLANATIONS[chosen.name.toLowerCase()]) && (
+                <span className="context-note">
+                  {t("System overview · structure identified from source anatomy")}
+                </span>
+              )}
+            {locale === "zh-CN" && chosen && chineseStructureKnowledge(chosen.name) && (
+              <section className="learning-note" aria-label="观察提示">
+                <h3>观察提示</h3>
+                <p>{chineseStructureKnowledge(chosen.name)!.observe}</p>
+              </section>
             )}
             <div className="structure-meta">
               <span>
@@ -679,6 +695,43 @@ export default function Home() {
             {t("Explore the adult male reference anatomy from BodyParts3D.")}
           </SheetDescription>
           <div className="about-copy">
+            {locale === "zh-CN" && (
+              <section className="reading-guide" aria-label="中文阅读指南">
+                <h3>中文阅读指南</h3>
+                {READING_GUIDE.map((item) => (
+                  <details key={item.title}>
+                    <summary>{item.title}</summary>
+                    <p>{item.body}</p>
+                  </details>
+                ))}
+                <details>
+                  <summary>常用解剖方位词</summary>
+                  <p>
+                    以下方位以标准解剖姿势为参照：身体直立、面向前方，手掌朝前。模型的姿势和相机角度可能与这一参照不同。
+                  </p>
+                  <dl>
+                    {DIRECTION_TERMS.map(([term, description]) => (
+                      <div key={term}>
+                        <dt>{term}</dt>
+                        <dd>{description}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </details>
+                <details>
+                  <summary>内容参考</summary>
+                  <p>
+                    中文学习说明为自行编写的简要内容，解剖事实参考 OpenStax
+                    教材，可联网查看以下页面。
+                  </p>
+                  {CONTENT_REFERENCES.map((reference) => (
+                    <a key={reference.url} href={reference.url} target="_blank" rel="noreferrer">
+                      {reference.title} <ArrowUpRight size={14} />
+                    </a>
+                  ))}
+                </details>
+              </section>
+            )}
             <p className="client-edition">
               {t(runtimeInfo().native ? "Offline client" : "Web viewer")} · {runtimeInfo().version}
             </p>

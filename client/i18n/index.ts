@@ -1,4 +1,5 @@
 import terms from "./terms.zh-CN.json" with { type: "json" };
+import { chineseStructureKnowledge, chineseSearchAliases } from "../content/zh-CN.ts";
 import type { SystemId } from "../../app/core/anatomy";
 const normalizedTerms = new Map(
   Object.entries(terms).map(([english, chinese]) => [english.toLowerCase(), chinese]),
@@ -206,13 +207,20 @@ export function displayName(english: string, locale: Locale) {
     : english;
 }
 export function searchText(english: string, id: string) {
-  return `${english}\n${displayName(english, "zh-CN")}\n${id}`.toLowerCase();
+  return `${english}\n${displayName(english, "zh-CN")}\n${id}\n${chineseSearchAliases(english)}`.toLowerCase();
 }
 export function systemName(id: SystemId, english: string, locale: Locale) {
   return locale === "zh-CN" ? SYSTEM_ZH[id].name : english;
 }
 export function chineseExplanation(name: string, system: SystemId) {
-  return EXPLANATION_ZH[name.toLowerCase()] ?? SYSTEM_ZH[system].description;
+  return (
+    chineseStructureKnowledge(name)?.summary ??
+    EXPLANATION_ZH[name.toLowerCase()] ??
+    SYSTEM_ZH[system].description
+  );
+}
+export function hasChineseExplanation(name: string) {
+  return !!(chineseStructureKnowledge(name) || EXPLANATION_ZH[name.toLowerCase()]);
 }
 export function readLocale(storage?: Pick<Storage, "getItem">): Locale {
   try {
