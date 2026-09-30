@@ -1,0 +1,14 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main",
+  "description": "Main window can open approved anatomy source links.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    {"identifier": "opener:allow-open-url", "allow": [
+      {"url": "https://lifesciencedb.jp/bp3d/"},
+      {"url": "https://dbarchive.biosciencedbc.jp/en/bodyparts3d/*"},
+      {"url": "https://academic.oup.com/nar/article/37/suppl_1/D782/1000752"}
+    ]}
+  ]
+}

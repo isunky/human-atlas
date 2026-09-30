@@ -1,0 +1,9 @@
+{
+  "status": "draft",
+  "source": "BodyParts3D 4.0 English names",
+  "method": "Offline anatomical stem dictionary, reviewed compound terms, and qualifier-preserving composition.",
+  "entries": 5090,
+  "parts": 2234,
+  "concepts": 3432,
+  "reviewNote": "Full Chinese draft; not professionally reviewed. Preserve English names and source identifiers when correcting terms."
+}
