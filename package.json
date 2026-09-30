@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": ">=22.13.0"
+    "node": ">=22.18.0"
   },
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 3016 --strictPort",
@@ -15,7 +15,10 @@
     "client:build": "tauri build --target x86_64-pc-windows-msvc --bundles nsis",
     "tauri": "tauri",
     "validate:client": "node scripts/validate-client.mjs",
-    "validate:locales": "node scripts/validate-locales.mjs"
+    "validate:locales": "node scripts/validate-locales.mjs",
+    "validate:atlas": "node scripts/validate-atlas.mjs",
+    "validate:interactions": "node scripts/validate-interactions.mjs",
+    "ci:check": "node scripts/ci-check.mjs"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",

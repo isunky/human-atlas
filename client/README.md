@@ -2,7 +2,9 @@
 
 ## 目录边界
 
-- `app/`：网页和客户端共用的查看器、场景和模型加载逻辑。
+- `app/page.tsx`：查看器界面与状态；`app/scene.tsx`：场景生命周期和交互调度。
+- `app/core/`：解剖数据类型、分解布局、指针状态、模型解压和搜索工具。
+- `app/rendering/`：材质着色器与可见索引批次。
 - `client/platform/`：运行环境判断与外部链接桥接。
 - `client/i18n/`：界面文案、术语草稿和生成来源。
 - `src-tauri/`：原生窗口、权限和安装配置。
@@ -11,7 +13,7 @@
 
 ## Windows 构建
 
-需要 Node.js 22.13+、Rust MSVC 工具链、Visual Studio C++ Build Tools 和 Windows SDK。依赖版本由 npm 与 Cargo 锁文件固定。
+需要 Node.js 22.18+、Rust MSVC 工具链、Visual Studio C++ Build Tools 和 Windows SDK。依赖版本由 npm 与 Cargo 锁文件固定；检查脚本使用 Node 原生 TypeScript 支持。
 
 ```powershell
 npm ci
@@ -40,17 +42,11 @@ npm run validate:locales
 ## 验证
 
 ```powershell
-npm run check
-npm run validate:locales
-node scripts/validate-atlas.mjs
-node scripts/validate-interactions.mjs
-npm run build
-npm run build:client
-npm run validate:client
+npm run ci:check
 cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 ```
 
-Windows CI 执行检查并上传测试安装包，不发布 Release。模型解压兼容原生 DecompressionStream 与 fflate 回退，拒绝截断和错误长度数据。
+GitHub Actions 先在独立 Linux 任务运行 `ci:check`，通过后在 Windows 检查 Rust 格式并构建、上传测试安装包，不发布 Release。相同分支有新运行时取消旧运行。模型解压兼容原生 DecompressionStream 与 fflate 回退，拒绝截断和错误长度数据。
 
 显隐变化会压紧对应批次的绘制索引，隐藏系统不提交三角形；隔离模式仅提交选中结构，分解视图的点标记也仅绘制可见零件。选中的隐藏系统零件仍按原有规则显示。索引只在批次可见集合变化时更新，分解动画不重复上传索引。为支持恢复显示，每个批次在 CPU 保留一份原始索引；切换系统减少绘制工作，但不释放已加载模型的显存。
 

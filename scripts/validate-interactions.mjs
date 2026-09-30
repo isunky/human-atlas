@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {createExplosionLayout} from '../app/explosion-layout.ts';
-import {PointerTap} from '../app/pointer-tap.ts';
-import {atlasTools} from '../app/agent-tools.ts';
+import {createExplosionLayout} from '../app/core/explosion-layout.ts';
+import {PointerTap} from '../app/core/pointer-tap.ts';
+import {atlasTools} from '../app/core/agent-tools.ts';
 
 for (const file of ['atlas.json']) {
   const atlas=JSON.parse(await readFile(new URL(`../public/models/${file}`,import.meta.url)));

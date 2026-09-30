@@ -1,14 +1,35 @@
-name: Windows client test package
+name: Checks and Windows client
+
 on:
   workflow_dispatch:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+
 permissions:
   contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
+  checks:
+    name: Core checks and frontend builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Types, locales, atlas, interactions and both frontend builds
+        run: npm run ci:check
+
+  windows:
+    name: Windows installer
+    needs: checks
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,14 +42,7 @@ jobs:
         with:
           workspaces: src-tauri
       - run: npm ci
-      - run: npm run check
-      - run: npm run validate:locales
-      - run: node scripts/validate-atlas.mjs
-      - run: node scripts/validate-interactions.mjs
-      - run: npm run build
-      - run: npm run build:client
-      - run: npm run validate:client
-      - run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
+      - run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
       - run: npm run client:build
       - uses: actions/upload-artifact@v4
         with:

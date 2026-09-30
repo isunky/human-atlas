@@ -1,6 +1,8 @@
 import terms from "./terms.zh-CN.json" with { type: "json" };
-import type { SystemId } from "../../app/anatomy";
-const normalizedTerms = new Map(Object.entries(terms).map(([english, chinese]) => [english.toLowerCase(), chinese]));
+import type { SystemId } from "../../app/core/anatomy";
+const normalizedTerms = new Map(
+  Object.entries(terms).map(([english, chinese]) => [english.toLowerCase(), chinese]),
+);
 
 export type Locale = "zh-CN" | "en";
 export const LANGUAGE_STORAGE_KEY = "human-atlas.language";
@@ -197,7 +199,11 @@ export function text(
   return template.replace(/\{(\w+)\}/g, (_, name: string) => String(values[name] ?? `{${name}}`));
 }
 export function displayName(english: string, locale: Locale) {
-  return locale === "zh-CN" ? ((terms as Record<string, string>)[english] ?? normalizedTerms.get(english.toLowerCase()) ?? english) : english;
+  return locale === "zh-CN"
+    ? ((terms as Record<string, string>)[english] ??
+        normalizedTerms.get(english.toLowerCase()) ??
+        english)
+    : english;
 }
 export function searchText(english: string, id: string) {
   return `${english}\n${displayName(english, "zh-CN")}\n${id}`.toLowerCase();

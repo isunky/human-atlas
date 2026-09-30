@@ -1,5 +1,5 @@
 import type { Atlas, Concept } from "./anatomy";
-import { searchText } from "../client/i18n/index.ts";
+import { searchText } from "../../client/i18n/index.ts";
 type Tool = {
   name: string;
   description: string;

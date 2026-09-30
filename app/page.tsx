@@ -11,7 +11,7 @@ import {
   type Locale,
 } from "../client/i18n";
 import { openExternal, runtimeInfo } from "../client/platform";
-import { registerAtlasTools } from "./agent-tools";
+import { registerAtlasTools } from "./core/agent-tools";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
@@ -50,7 +50,7 @@ import {
   type SceneState,
   type SystemId,
   type View,
-} from "./anatomy";
+} from "./core/anatomy";
 const initial: SceneState = {
   explode: 0,
   visible: DEFAULT_VISIBLE,
@@ -542,8 +542,8 @@ export default function Home() {
       </div>
       <footer className="studio-footer">
         <span>
-          {state.explode > 0.8 ? t("Drag to pan") : t("Drag to orbit")} <b>·</b> {t("Pinch to zoom")}{" "}
-          <b>·</b> {t("Tap to inspect")}
+          {state.explode > 0.8 ? t("Drag to pan") : t("Drag to orbit")} <b>·</b>{" "}
+          {t("Pinch to zoom")} <b>·</b> {t("Tap to inspect")}
         </span>
         <Button
           variant="ghost"

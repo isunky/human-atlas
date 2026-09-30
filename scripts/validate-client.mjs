@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {gzipSync} from 'node:zlib';
-import {decodeModelResponse} from '../app/model-download.ts';
+import {decodeModelResponse} from '../app/core/model-download.ts';
 
 const sample = new TextEncoder().encode('Human Atlas · 心脏');
 const gzip = gzipSync(sample);

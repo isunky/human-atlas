@@ -27,7 +27,7 @@ An interactive 3D anatomy explorer built with React, Three.js, and shadcn/ui. Ta
 
 ## Run locally
 
-Requires Node.js 22.13 or newer. No API keys or accounts are needed.
+Requires Node.js 22.18 or newer (the validation scripts use native TypeScript support). No API keys or accounts are needed.
 
 ```sh
 npm ci
@@ -39,13 +39,12 @@ Open http://localhost:3016. To build the static site, run `npm run build`; the o
 ## Validate
 
 ```sh
-npm run check
-node scripts/validate-atlas.mjs
-node scripts/validate-interactions.mjs
-npm run build
+npm run ci:check
 ```
 
 Validation covers mesh buffers, names and concept membership, nonoverlapping exploded layouts at desktop and mobile aspect ratios, search and inspection contracts, and tap-versus-drag handling. Browser interaction checks have exercised selection, system controls, search, isolation, rotation, and 390×844, 320×568, and 844×390 layouts. Phone controls stay clear of the exploded inventory, and isolated structures fit the space above or beside the detail panel. Physical-device performance and real multitouch hardware have not been tested.
+
+`ci:check` runs types, localization, atlas data and interaction checks, builds both frontend targets, then validates the packaged client assets. GitHub Actions runs these checks on Linux before building the Windows installer and uploading it as an artifact. See [project structure and CI](docs/PROJECT_STRUCTURE.md).
 
 ## Anatomy data
 

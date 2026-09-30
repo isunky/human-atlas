@@ -1,12 +1,14 @@
+import { createAnatomyMaterial } from "./rendering/materials";
+import { updateDrawBatches, type DrawBatch } from "./rendering/draw-batches";
 import { useEffect, useRef } from "react";
 import * as T from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import { createExplosionLayout } from "./explosion-layout";
-import { decodeModelResponse } from "./model-download";
-import { PointerTap } from "./pointer-tap";
-import { SYSTEMS, type Atlas, type SceneState } from "./anatomy";
+import { createExplosionLayout } from "./core/explosion-layout";
+import { decodeModelResponse } from "./core/model-download";
+import { PointerTap } from "./core/pointer-tap";
+import { SYSTEMS, type Atlas, type SceneState } from "./core/anatomy";
 import { displayName, text, type Locale } from "../client/i18n";
 interface Props {
   atlas: Atlas;
@@ -256,64 +258,15 @@ export default function AnatomyScene({
       }
       return best;
     };
-    const materialFor = (system: string) => {
-      const m = new T.MeshStandardMaterial({
-        color: SYSTEMS.find((s) => s.id === system)?.color ?? "#aebbb8",
-        metalness: 0.08,
-        roughness: 0.53,
-        side: T.DoubleSide,
-        transparent: system === "integumentary",
-        opacity: system === "integumentary" ? 0.1 : 1,
-        depthWrite: system !== "integumentary",
-      });
-      m.onBeforeCompile = (shader) => {
-        shader.uniforms.partState = { value: partTexture };
-        shader.uniforms.selectionState = { value: selectionTexture };
-        shader.uniforms.stateWidth = { value: width };
-        shader.vertexShader =
-          "attribute float partIndex; uniform sampler2D partState; uniform sampler2D selectionState; uniform float stateWidth; varying float partSelected;\n" +
-          shader.vertexShader;
-        shader.vertexShader = shader.vertexShader.replace(
-          "#include <begin_vertex>",
-          "#include <begin_vertex>\nvec2 stateUv = vec2((partIndex + 0.5) / stateWidth, 0.5); vec4 state = texture2D(partState, stateUv); transformed += state.xyz; partSelected = texture2D(selectionState, stateUv).r;",
-        );
-        shader.fragmentShader = "varying float partSelected;\n" + shader.fragmentShader;
-        shader.fragmentShader = shader.fragmentShader.replace(
-          "#include <color_fragment>",
-          "#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.42, 0.85, 0.78), partSelected * 0.75);",
-        );
-      };
-      materials.push(m);
-      return m;
-    };
-    const mats = new Map(SYSTEMS.map((s) => [s.id, materialFor(s.id)]));
-    // Keep the original merged indices on the CPU. Only visible parts enter the
-    // draw buffer, so hidden anatomy never reaches the vertex/fragment shaders.
-    type DrawBatch = {
-      mesh: T.Mesh;
-      source: Uint32Array;
-      index: T.BufferAttribute;
-      spans: { part: number; start: number; count: number; visible: number }[];
-    };
+    const mats = new Map(
+      SYSTEMS.map((system) => {
+        const material = createAnatomyMaterial(system.id, partTexture, selectionTexture, width);
+        materials.push(material);
+        return [system.id, material];
+      }),
+    );
     const batches: DrawBatch[] = [];
     const partVisibility = new Uint8Array(atlas.parts.length);
-    const updateDrawBatches = () => {
-      for (const batch of batches) {
-        if (!batch.spans.some((span) => span.visible !== partVisibility[span.part])) continue;
-        const target = batch.index.array as Uint32Array;
-        let count = 0;
-        for (const span of batch.spans) {
-          span.visible = partVisibility[span.part];
-          if (!partVisibility[span.part]) continue;
-          target.set(batch.source.subarray(span.start, span.start + span.count), count);
-          count += span.count;
-        }
-        batch.mesh.visible = count > 0;
-        batch.mesh.geometry.setDrawRange(0, count);
-        // No upload or draw call is needed for an entirely hidden batch.
-        if (count > 0) batch.index.needsUpdate = true;
-      }
-    };
     let loaded = 0;
     const loadChunk = async (ci: number) => {
       const chunk = atlas.chunks[ci],
@@ -578,7 +531,7 @@ export default function AnatomyScene({
           layoutKey = nextLayoutKey;
           if (amount > 0.05 && !s.isolate) fit(s.view, Math.max(0, (amount - 0.3) / 0.7));
         }
-        updateDrawBatches();
+        updateDrawBatches(batches, partVisibility);
         selectionTexture.needsUpdate = true;
       }
 
