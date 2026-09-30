@@ -123,3 +123,30 @@ h1 .edition{font-family:inherit;font-weight:500;font-size:10px;letter-spacing:.0
  .system-name{font-size:13px}.system-only{min-height:44px;height:44px;font-size:12px}
  .view-controls .view-reset{height:44px}
 }
+
+/* Search context stays beside the input, with keyboard navigation in an inline list. */
+.search-panel{display:flex;flex-direction:column;max-height:calc(100dvh - 180px)}
+.search-panel>.panel-heading,.search-panel>[data-slot=input-group],.search-help,.search-result-summary,.search-note{flex-shrink:0}
+.search-help{margin:10px 0 0;font-size:11px;line-height:1.65;color:#526270}
+.search-clear{min-width:36px;min-height:36px;padding:0}
+.search-result-summary{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:10px 0 7px;font-size:11px;color:#526270}
+.search-result-summary button{height:auto;min-height:28px;padding:0 3px;font-size:10px;font-weight:400}
+.search-inline{display:flex;flex-direction:column;flex:1;min-height:0;width:100%;overflow:hidden;border-radius:9px}
+.search-inline .search-list{min-height:0;max-height:320px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#b9c3cc transparent}
+.search-empty:not(:empty){padding:16px 10px;text-align:center;font-size:12px;color:#526270}
+.anatomy-search-results .search-result{padding:8px 12px;gap:8px;align-items:center;white-space:normal}
+.search-result-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.search-result-title{display:flex;align-items:baseline;gap:8px}
+.search-result-name{font-size:13px;line-height:1.45;font-weight:500;overflow-wrap:anywhere}
+.search-side{flex-shrink:0;font-size:10px;line-height:1.5;border:1px solid #25384a28;border-radius:4px;padding:1px 5px;color:#435966}
+.search-source-name,.search-source-id{font-size:10px;line-height:1.4;color:#526270;overflow-wrap:anywhere}
+.search-result-context{display:flex;align-items:center;flex-wrap:wrap;gap:5px 9px;font-size:10px;color:#526270}
+.search-system{display:inline-flex;align-items:center;gap:5px}.search-recent{color:#345765}
+.search-alias{font-size:11px;line-height:1.5;color:#345765}
+.search-panel .search-note{font-size:11px;color:#526270;margin-top:9px}
+@media(max-width:767px){
+ .search-panel{max-height:calc(100dvh - 355px)}
+ .search-inline{max-height:none!important}.search-clear{min-width:44px;min-height:44px}
+ .search-result-summary button{min-height:36px}.search-result-name{font-size:14px}
+}
+@media(max-height:600px) and (orientation:landscape){.search-panel{max-height:calc(100dvh - 150px)}.search-help{font-size:10px;line-height:1.4}.search-inline{max-height:none!important}}

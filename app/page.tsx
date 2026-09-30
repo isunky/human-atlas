@@ -8,7 +8,6 @@ import {
 import {
   text,
   displayName,
-  searchText,
   systemName,
   chineseExplanation,
   hasChineseExplanation,
@@ -19,6 +18,8 @@ import {
 } from "../client/i18n";
 import { openExternal, runtimeInfo } from "../client/platform";
 import { registerAtlasTools } from "./core/agent-tools";
+import { anatomySearchIndex, matchedSearchAlias, type SearchEntry } from "./core/anatomy-search";
+import { InputGroupButton } from "@/components/ui/input-group";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
@@ -41,7 +42,6 @@ import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/
 import {
   Combobox,
   ComboboxInput,
-  ComboboxContent,
   ComboboxList,
   ComboboxItem,
   ComboboxEmpty,
@@ -106,6 +106,8 @@ export default function Home() {
     void openExternal(anchor.href).catch(() => setLinkError(true));
   };
   const detailTitle = useRef<HTMLHeadingElement>(null);
+  const searchInput = useRef<HTMLInputElement>(null);
+  const [recentIds, setRecentIds] = useState<string[]>([]);
   const [atlas, setAtlas] = useState<Atlas | null>(null),
     [state, setState] = useState(initial),
     [progress, setProgress] = useState(0),
@@ -150,6 +152,10 @@ export default function Home() {
     return () => window.removeEventListener("keydown", key);
   }, []);
   const parts = useMemo(() => new Map(atlas?.parts.map((p) => [p.id, p])), [atlas]);
+  const searchIndex = useMemo(
+    () => (atlas ? anatomySearchIndex(atlas) : new Map<string, SearchEntry>()),
+    [atlas],
+  );
   const counts = useMemo(
     () =>
       Object.fromEntries(
@@ -195,11 +201,11 @@ export default function Home() {
         ? state.selected.includes(p.id)
         : state.visible.includes(p.system) || state.selected.includes(p.id),
     ).length ?? 0;
-  const results = useMemo(() => {
-    if (!atlas) return [];
+  const searchResults = useMemo(() => {
+    if (!atlas) return { items: [] as Concept[], total: 0 };
     const term = query.toLowerCase().trim();
-    if (!term)
-      return [
+    if (!term) {
+      const popular = [
         "heart",
         "brain",
         "liver",
@@ -211,12 +217,19 @@ export default function Home() {
       ]
         .map((name) => atlas.concepts.find((c) => c.name.toLowerCase() === name))
         .filter((x): x is Concept => !!x);
-    return atlas.concepts
-      .filter((c) => searchText(c.name, c.id).includes(term))
-      .sort((a, b) => a.name.length - b.name.length)
-      .slice(0, 80);
-  }, [atlas, query]);
+      const recent = recentIds.flatMap((id) => searchIndex.get(id)?.concept ?? []);
+      return { items: [...recent, ...popular.filter((c) => !recentIds.includes(c.id))], total: 0 };
+    }
+    const matches = atlas.concepts
+      .filter((c) => searchIndex.get(c.id)?.searchable.includes(term))
+      .sort((a, b) => a.name.length - b.name.length);
+    return { items: matches.slice(0, 80), total: matches.length };
+  }, [atlas, query, recentIds, searchIndex]);
+  const results = searchResults.items;
+  const remember = (id: string) =>
+    setRecentIds((ids) => [id, ...ids.filter((existing) => existing !== id)].slice(0, 6));
   const choose = (c: Concept) => {
+    remember(c.id);
     setChosen(c);
     setState((s) => ({ ...s, selected: c.elements, isolate: false, rotate: false }));
     setDetails(true);
@@ -229,6 +242,7 @@ export default function Home() {
   const choosePart = (id: string) => {
     const p = parts.get(id);
     if (!p) return;
+    remember(p.conceptId);
     setChosen({ id: p.conceptId, name: p.name, elements: [id] });
     setState((s) => ({ ...s, selected: [id], isolate: false, rotate: false }));
     setDetails(true);
@@ -447,6 +461,7 @@ export default function Home() {
           </div>
           <Combobox<Concept>
             items={results}
+            inline
             value={null}
             onValueChange={(value) => {
               if (value) choose(value);
@@ -455,37 +470,116 @@ export default function Home() {
             onInputValueChange={setQuery}
             itemToStringLabel={(c) => dn(c.name)}
             filter={null}
-            open
-            onOpenChange={(open) => {
-              if (!open) setPanel(null);
-            }}
           >
             <ComboboxInput
+              ref={searchInput}
               autoFocus
               placeholder={t("Heart, femur, cranial nerve…")}
               aria-label={t("Search named anatomical structures")}
               showTrigger={false}
+              aria-describedby="search-help"
+              onKeyDown={(event) => {
+                if (event.key === "Escape") setPanel(null);
+              }}
+              endAdornment={
+                query && (
+                  <InputGroupButton
+                    className="search-clear"
+                    variant="ghost"
+                    aria-label={t("Clear search")}
+                    title={t("Clear search")}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      setQuery("");
+                      searchInput.current?.focus();
+                    }}
+                  >
+                    <X size={14} />
+                  </InputGroupButton>
+                )
+              }
             />
-            <ComboboxContent className="anatomy-search-results">
-              <ComboboxEmpty>{t("No structures match your search.")}</ComboboxEmpty>
-              <ComboboxList>
-                {(c: Concept) => (
-                  <ComboboxItem key={c.id} value={c}>
-                    <span className="search-result-name">
-                      {dn(c.name)}
-                      {locale === "zh-CN" && <small>{c.name}</small>}
-                    </span>
-                    <span className="small-number">
-                      {c.elements.length} {c.elements.length === 1 ? t("piece") : t("pieces")}
-                    </span>
-                  </ComboboxItem>
-                )}
+            <p id="search-help" className="search-help">
+              {t("Select a result to highlight it and open details.")}
+              <br />
+              {t("Left and right refer to the body's own sides.")}
+            </p>
+            <div className="search-result-summary">
+              <span role="status">
+                {query.trim()
+                  ? t("{count} matches", { count: searchResults.total })
+                  : recentIds.length
+                    ? t("Recent & common structures")
+                    : t("Common structures")}
+              </span>
+              {!query.trim() && recentIds.length > 0 && (
+                <Button variant="ghost" onClick={() => setRecentIds([])}>
+                  {t("Clear recent")}
+                </Button>
+              )}
+            </div>
+            <div className="anatomy-search-results search-inline">
+              <ComboboxEmpty className="search-empty block p-0">
+                {t("No structures match your search.")}
+              </ComboboxEmpty>
+              <ComboboxList className="search-list" aria-label={t("Anatomical search results")}>
+                {(c: Concept) => {
+                  const entry = searchIndex.get(c.id);
+                  const alias = entry && matchedSearchAlias(entry, query);
+                  const side = entry?.side;
+                  return (
+                    <ComboboxItem key={c.id} value={c} className="search-result">
+                      <span className="search-result-body">
+                        <span className="search-result-title">
+                          <span className="search-result-name">{dn(c.name)}</span>
+                          {side && (
+                            <span className="search-side">
+                              {side === "both"
+                                ? t("Left & right")
+                                : side === "left"
+                                  ? t("Left side")
+                                  : t("Right side")}
+                            </span>
+                          )}
+                        </span>
+                        {locale === "zh-CN" && <span className="search-source-name">{c.name}</span>}
+                        <span className="search-result-context">
+                          <span>{t("Included systems")}</span>
+                          {entry?.systems.map((id) => {
+                            const system = SYSTEMS.find((s) => s.id === id)!;
+                            return (
+                              <span className="search-system" key={id}>
+                                <span className="system-dot" style={{ background: system.color }} />
+                                {sn(system)}
+                              </span>
+                            );
+                          })}
+                          <span>{t("{count} pieces", { count: c.elements.length })}</span>
+                          {!query.trim() && recentIds.includes(c.id) && (
+                            <span className="search-recent">{t("Recent")}</span>
+                          )}
+                        </span>
+                        {alias && (
+                          <span className="search-alias">
+                            {t("Matched alias: {alias}", { alias })}
+                          </span>
+                        )}
+                        <span className="search-source-id">
+                          {t("Atlas reference")}: {c.id}
+                        </span>
+                      </span>
+                      <ChevronRight size={14} aria-hidden="true" />
+                    </ComboboxItem>
+                  );
+                }}
               </ComboboxList>
-            </ComboboxContent>
+            </div>
           </Combobox>
           <p className="search-note">
             {query
-              ? t("Showing up to 80 matches. Refine your search to find smaller structures.")
+              ? searchResults.total > 80
+                ? t("Showing up to 80 matches. Refine your search to find smaller structures.")
+                : t("Search by Chinese or English name, alias or source ID.")
               : t("Start with a major organ, or search every named structure.")}
           </p>
         </section>

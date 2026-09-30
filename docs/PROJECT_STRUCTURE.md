@@ -12,6 +12,7 @@
 | `app/core/pointer-tap.ts` | 点击、拖动、多指和取消状态 |
 | `app/core/model-download.ts` | 模型响应与 gzip 解压 |
 | `app/core/agent-tools.ts` | 搜索/检查工具契约 |
+| `app/core/anatomy-search.ts` | 搜索索引、所属系统/左右信息与俗称匹配提示 |
 | `app/rendering/materials.ts` | 系统材质、位置/选择纹理和着色器 |
 | `app/rendering/draw-batches.ts` | 可见索引压紧和绘制范围 |
 | `client/` | 中英文与平台桥接 |
