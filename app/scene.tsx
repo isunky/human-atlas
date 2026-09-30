@@ -240,18 +240,14 @@ export default function AnatomyScene({
         shader.uniforms.selectionState = { value: selectionTexture };
         shader.uniforms.stateWidth = { value: width };
         shader.vertexShader =
-          "attribute float partIndex; uniform sampler2D partState; uniform sampler2D selectionState; uniform float stateWidth; varying float partVisible; varying float partSelected;\n" +
+          "attribute float partIndex; uniform sampler2D partState; uniform sampler2D selectionState; uniform float stateWidth; varying float partSelected;\n" +
           shader.vertexShader;
         shader.vertexShader = shader.vertexShader.replace(
           "#include <begin_vertex>",
-          "#include <begin_vertex>\nvec2 stateUv = vec2((partIndex + 0.5) / stateWidth, 0.5); vec4 state = texture2D(partState, stateUv); transformed += state.xyz; partVisible = state.w; partSelected = texture2D(selectionState, stateUv).r;",
+          "#include <begin_vertex>\nvec2 stateUv = vec2((partIndex + 0.5) / stateWidth, 0.5); vec4 state = texture2D(partState, stateUv); transformed += state.xyz; partSelected = texture2D(selectionState, stateUv).r;",
         );
         shader.fragmentShader =
-          "varying float partVisible; varying float partSelected;\n" + shader.fragmentShader;
-        shader.fragmentShader = shader.fragmentShader.replace(
-          "#include <clipping_planes_fragment>",
-          "#include <clipping_planes_fragment>\nif (partVisible < 0.5) discard;",
-        );
+          "varying float partSelected;\n" + shader.fragmentShader;
         shader.fragmentShader = shader.fragmentShader.replace(
           "#include <color_fragment>",
           "#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.42, 0.85, 0.78), partSelected * 0.75);",
@@ -261,6 +257,33 @@ export default function AnatomyScene({
       return m;
     };
     const mats = new Map(SYSTEMS.map((s) => [s.id, materialFor(s.id)]));
+    // Keep the original merged indices on the CPU. Only visible parts enter the
+    // draw buffer, so hidden anatomy never reaches the vertex/fragment shaders.
+    type DrawBatch = {
+      mesh: T.Mesh;
+      source: Uint32Array;
+      index: T.BufferAttribute;
+      spans: { part: number; start: number; count: number; visible: number }[];
+    };
+    const batches: DrawBatch[] = [];
+    const partVisibility = new Uint8Array(atlas.parts.length);
+    const updateDrawBatches = () => {
+      for (const batch of batches) {
+        if (!batch.spans.some((span) => span.visible !== partVisibility[span.part])) continue;
+        const target = batch.index.array as Uint32Array;
+        let count = 0;
+        for (const span of batch.spans) {
+          span.visible = partVisibility[span.part];
+          if (!partVisibility[span.part]) continue;
+          target.set(batch.source.subarray(span.start, span.start + span.count), count);
+          count += span.count;
+        }
+        batch.mesh.visible = count > 0;
+        batch.mesh.geometry.setDrawRange(0, count);
+        // No upload or draw call is needed for an entirely hidden batch.
+        if (count > 0) batch.index.needsUpdate = true;
+      }
+    };
     let loaded = 0;
     const loadChunk = async (ci: number) => {
       const chunk = atlas.chunks[ci],
@@ -268,7 +291,7 @@ export default function AnatomyScene({
       const response = await fetch(compressed ? chunk.gzip! : chunk.url, { signal: abort.signal });
       const buffer = await decodeModelResponse(response, chunk.bytes, compressed);
       if (disposed) return;
-      const groups = new Map<string, T.BufferGeometry[]>();
+      const groups = new Map<string, { geometry: T.BufferGeometry; part: number }[]>();
       atlas.parts.forEach((p, i) => {
         if (p.chunk !== ci) return;
         const g = new T.BufferGeometry();
@@ -293,15 +316,32 @@ export default function AnatomyScene({
           new T.BufferAttribute(new Float32Array(p.vertexCount).fill(i), 1),
         );
         const list = groups.get(p.system) ?? [];
-        list.push(g);
+        list.push({ geometry: g, part: i });
         groups.set(p.system, list);
       });
       groups.forEach((gs, system) => {
-        const geometry = mergeGeometries(gs, false);
+        const geometry = mergeGeometries(gs.map((entry) => entry.geometry), false);
         if (!geometry) throw new Error("Could not assemble anatomy geometry.");
         geometries.push(geometry);
         const mesh = new T.Mesh(geometry, mats.get(system as never));
         mesh.frustumCulled = false;
+        // Start hidden until the current state is applied, including when a
+        // user switches systems while chunks are still arriving.
+        mesh.visible = false;
+        const index = geometry.getIndex()!;
+        const source = new Uint32Array(index.array);
+        const drawIndex = new T.BufferAttribute(new Uint32Array(source.length), 1);
+        drawIndex.setUsage(T.DynamicDrawUsage);
+        geometry.setIndex(drawIndex);
+        geometry.setDrawRange(0, 0);
+        let start = 0;
+        const spans = gs.map((entry) => {
+          const count = atlas.parts[entry.part].indexCount;
+          const span = { part: entry.part, start, count, visible: 0 };
+          start += count;
+          return span;
+        });
+        batches.push({ mesh, source, index: drawIndex, spans });
         scene.add(mesh);
       });
       lastState = null;
@@ -489,6 +529,7 @@ export default function AnatomyScene({
           if (amount > 0.05 && !s.isolate) fit(s.view, Math.max(0, (amount - 0.3) / 0.7));
         }
 
+        let markerCount = 0;
         atlas.parts.forEach((p, i) => {
           const c = centers[i],
             destination = offsets[i];
@@ -516,10 +557,11 @@ export default function AnatomyScene({
             i * 4,
           );
           selectedData[i * 4] = selected ? 255 : 0;
-          markerPositions.set(
-            data[i * 4 + 3] > 0.5 ? [c.x + dx, c.y + dy, c.z + dz] : [10000, 10000, 10000],
-            i * 3,
-          );
+          partVisibility[i] = data[i * 4 + 3] > 0.5 ? 1 : 0;
+          if (partVisibility[i]) {
+            markerPositions.set([c.x + dx, c.y + dy, c.z + dz], markerCount * 3);
+            markerCount++;
+          }
           const mesh = pickers[i];
           if (mesh) {
             mesh.position.set(dx, dy, dz);
@@ -527,6 +569,10 @@ export default function AnatomyScene({
             mesh.updateMatrixWorld(true);
           }
         });
+        // Rebuild indices only when visibility/selection changes or a chunk
+        // arrives. Explosion animation only updates positions and textures.
+        if (changed) updateDrawBatches();
+        markerGeometry.setDrawRange(0, markerCount);
         partTexture.needsUpdate = true;
         selectionTexture.needsUpdate = true;
         markerGeometry.attributes.position.needsUpdate = true;
