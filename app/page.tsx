@@ -67,6 +67,14 @@ const initial: SceneState = {
   rotate: false,
   reset: 0,
 };
+const ORGAN_SYSTEMS: SystemId[] = [
+  "cardiac",
+  "respiratory",
+  "digestive",
+  "urinary",
+  "endocrine",
+  "reproductive",
+];
 export default function Home() {
   const [locale, setLocale] = useState<Locale>(() => {
     try {
@@ -150,6 +158,34 @@ export default function Home() {
     [atlas],
   );
   const activeSystems = SYSTEMS.filter((s) => counts[s.id] > 0);
+  const matchesLayers = (ids: SystemId[]) =>
+    !state.isolate &&
+    state.visible.length === ids.length &&
+    ids.every((id) => state.visible.includes(id));
+  const allLayers = matchesLayers(activeSystems.map((s) => s.id));
+  const skeletonLayers = matchesLayers(["skeletal"]);
+  const organLayers = matchesLayers(ORGAN_SYSTEMS);
+  const singleSystem = activeSystems.find((s) => matchesLayers([s.id]));
+  const layerStatus = state.isolate
+    ? t("Isolated selection")
+    : !state.visible.length
+      ? t("All hidden")
+      : allLayers
+        ? t("All")
+        : skeletonLayers
+          ? t("Skeleton")
+          : organLayers
+            ? t("Organs")
+            : matchesLayers(DEFAULT_VISIBLE)
+              ? t("Default layers")
+              : singleSystem
+                ? t("Only {name}", { name: sn(singleSystem) })
+                : t("Custom layers");
+  const applyLayers = (visible: SystemId[]) => {
+    setDetails(false);
+    setChosen(null);
+    setState((s) => ({ ...s, visible, selected: [], isolate: false }));
+  };
   const selectedParts = state.selected.map((id) => parts.get(id)).filter((p) => !!p),
     selected = selectedParts[0],
     system = SYSTEMS.find((s) => s.id === selected?.system);
@@ -212,6 +248,14 @@ export default function Home() {
     setChosen(null);
     setDetails(false);
     setPanel(null);
+  };
+  const resetView = () => {
+    setState((s) => ({
+      ...s,
+      view: s.explode > 0.8 ? "front" : initial.view,
+      rotate: false,
+      reset: s.reset + 1,
+    }));
   };
   const openPanel = (next: "layers" | "search") => {
     setDetails(false);
@@ -302,93 +346,88 @@ export default function Home() {
           >
             <X size={18} />
           </Button>
-          <Badge variant="secondary" className="desktop-only small-number">
+          <Badge
+            variant="secondary"
+            className="desktop-only small-number"
+            title={t("{count} systems available", { count: activeSystems.length })}
+          >
             {activeSystems.length}
           </Badge>
         </div>
         <div className="layer-presets">
           <Button
             variant="ghost"
-            aria-pressed={activeSystems.every((x) => state.visible.includes(x.id))}
-            onClick={() =>
-              setState((s) => ({
-                ...s,
-                selected: [],
-                isolate: false,
-                visible: activeSystems.map((x) => x.id),
-              }))
-            }
+            aria-pressed={allLayers}
+            onClick={() => applyLayers(activeSystems.map((s) => s.id))}
           >
             {t("All")}
           </Button>
           <Button
             variant="ghost"
-            aria-pressed={state.visible.length === 1 && state.visible[0] === "skeletal"}
-            onClick={() =>
-              setState((s) => ({ ...s, selected: [], isolate: false, visible: ["skeletal"] }))
-            }
+            aria-pressed={skeletonLayers}
+            onClick={() => applyLayers(["skeletal"])}
           >
             {t("Skeleton")}
           </Button>
           <Button
             variant="ghost"
-            aria-pressed={
-              state.visible.length === 6 &&
-              ["cardiac", "respiratory", "digestive", "urinary", "endocrine", "reproductive"].every(
-                (id) => state.visible.includes(id as SystemId),
-              )
-            }
-            onClick={() =>
-              setState((s) => ({
-                ...s,
-                selected: [],
-                isolate: false,
-                visible: [
-                  "cardiac",
-                  "respiratory",
-                  "digestive",
-                  "urinary",
-                  "endocrine",
-                  "reproductive",
-                ],
-              }))
-            }
+            aria-pressed={organLayers}
+            onClick={() => applyLayers(ORGAN_SYSTEMS)}
           >
             {t("Organs")}
           </Button>
         </div>
-        <div className="system-list">
+        <div className="layer-context">
+          <p className="layer-status" role="status">
+            <span>{t("Current layers")}</span>
+            <strong>{layerStatus}</strong>
+          </p>
+          <p id="layer-help" className="layer-help">
+            {t("Switches show or hide; Only shows one system.")}
+          </p>
+          {selectedParts.some((p) => !state.visible.includes(p.system)) && !state.isolate && (
+            <p className="layer-help">{t("Selected structures remain visible.")}</p>
+          )}
+        </div>
+        <div className="system-list" aria-describedby="layer-help">
           {activeSystems.map((s) => (
             <div
               className={`system-row ${state.visible.includes(s.id) ? "enabled" : ""}`}
               key={s.id}
             >
+              <div className="system-name" title={sn(s)}>
+                <span className="system-dot" style={{ background: s.color }} />
+                <span className="system-label">{sn(s)}</span>
+                <span className="system-count" title={t("{count} pieces", { count: counts[s.id] })}>
+                  {counts[s.id]}
+                </span>
+              </div>
               <Button
                 variant="ghost"
-                className="system-name"
+                className="system-only"
                 title={t("Show only {name}", { name: sn(s) })}
-                onClick={() =>
-                  setState((v) => ({ ...v, visible: [s.id], isolate: false, selected: [] }))
-                }
+                aria-label={t("Show only {name}", { name: sn(s) })}
+                aria-pressed={matchesLayers([s.id])}
+                onClick={() => applyLayers([s.id])}
               >
-                <span className="system-dot" style={{ background: s.color }} />
-                {sn(s)}
-                <span className="system-count">{counts[s.id]}</span>
+                {t("Only")}
               </Button>
               <Switch
                 checked={state.visible.includes(s.id)}
                 onCheckedChange={() => toggle(s.id)}
                 aria-label={t("Show {name}", { name: sn(s) })}
+                title={
+                  state.visible.includes(s.id)
+                    ? t("Hide {name}", { name: sn(s) })
+                    : t("Show {name}", { name: sn(s) })
+                }
               />
             </div>
           ))}
         </div>
         <div className="panel-foot">
           <span>{t("{count} pieces visible", { count: visibleCount.toLocaleString() })}</span>
-          <Button
-            variant="ghost"
-            onClick={() => setState((s) => ({ ...s, visible: [], selected: [], isolate: false }))}
-          >
+          <Button variant="ghost" onClick={() => applyLayers([])}>
             {t("Hide all")}
           </Button>
         </div>
@@ -479,11 +518,13 @@ export default function Home() {
         </Button>
         <Button
           variant="ghost"
-          aria-label={t("Reset view and layers")}
-          title={t("Reset")}
-          onClick={reset}
+          className="view-reset"
+          aria-label={t("Reset view")}
+          title={t("Reset view; keep layers, selection and separation")}
+          onClick={resetView}
         >
           <RotateCcw size={17} />
+          <span>{t("Reset view")}</span>
         </Button>
       </nav>
       <div className="scene-caption">
@@ -541,10 +582,11 @@ export default function Home() {
           variant="ghost"
           className="dock-reset"
           onClick={reset}
-          aria-label={t("Assemble and reset")}
+          aria-label={t("Reset all")}
+          title={t("Restore default layers, clear selection and assemble anatomy")}
         >
           <RotateCcw size={18} />
-          <span>{t("Reset")}</span>
+          <span>{t("Reset all")}</span>
         </Button>
       </div>
       <footer className="studio-footer">

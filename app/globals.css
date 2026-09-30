@@ -98,3 +98,28 @@ h1 .edition{font-family:inherit;font-weight:500;font-size:10px;letter-spacing:.0
 @media(max-height:600px) and (orientation:landscape){.language-choice{top:62px}.view-controls{top:76px}.search-panel{top:122px}}
 /* Chinese reading guide and structure learning notes. */
 .reading-guide{margin-bottom:24px}.reading-guide details{padding:12px 0;border-bottom:1px solid var(--border)}.reading-guide summary{cursor:pointer;font-size:14px;font-weight:600;line-height:1.6}.reading-guide details p{margin:10px 0;font-size:13px;line-height:1.85}.reading-guide dl{font-size:13px;line-height:1.8}.reading-guide dl>div{margin:10px 0}.reading-guide dt{font-weight:600}.reading-guide dd{margin:0;color:var(--muted-foreground)}.learning-note{margin:14px 0;padding:12px 14px;background:var(--accent);border-radius:10px}.learning-note h3{margin:0 0 6px;font-size:13px;font-weight:600}.learning-note p{margin:0;font-size:13px;line-height:1.8;color:var(--muted-foreground)}
+
+/* Overall browsing: explicit layer actions and reset scopes. */
+.layer-context{flex-shrink:0;padding:0 3px 10px;border-bottom:1px solid var(--border)}
+.layer-status{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:0;font-size:11px;line-height:1.6;color:#526270}
+.layer-status strong{color:#263b48;font-weight:600;text-align:right}
+.layer-help{margin:5px 0 0;font-size:11px;line-height:1.65;color:#526270}
+.system-list{min-height:0;padding-right:6px}
+.system-row{display:grid;grid-template-columns:minmax(0,1fr) 40px 32px;gap:12px;min-height:40px}
+.system-name{padding:0;gap:5px;font-size:12px;color:#526270;min-width:0;min-height:0;overflow:hidden}
+.enabled .system-name{color:#344553}
+.system-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.system-count{flex-shrink:0;color:#526270}
+.system-only{height:32px;min-height:32px;padding:0 4px;font-size:11px;font-weight:400;border:1px solid #25384a28;border-radius:6px;color:#435966}
+.system-only[aria-pressed=true]{background:#263b48;color:white;border-color:#263b48}
+.system-row [data-slot=switch]{margin:0}
+.panel-foot,.panel-foot button,.identity-meta,.scene-caption,.slider-endpoints,.studio-footer,.dock-reset{color:#526270}
+.view-controls .view-reset{display:flex;flex-direction:column;gap:2px;padding:0;height:54px;font-size:9px;line-height:12px;color:#435966}
+.view-reset span{white-space:normal;text-align:center}
+@media(min-width:1100px){.layers-panel{bottom:90px}}
+@media(max-width:1000px){.system-name{font-size:11px}}
+@media(max-width:767px){
+ .system-row{grid-template-columns:minmax(0,1fr) 44px 32px;min-height:44px}
+ .system-name{font-size:13px}.system-only{min-height:44px;height:44px;font-size:12px}
+ .view-controls .view-reset{height:44px}
+}
