@@ -150,3 +150,39 @@ h1 .edition{font-family:inherit;font-weight:500;font-size:10px;letter-spacing:.0
  .search-result-summary button{min-height:36px}.search-result-name{font-size:14px}
 }
 @media(max-height:600px) and (orientation:landscape){.search-panel{max-height:calc(100dvh - 150px)}.search-help{font-size:10px;line-height:1.4}.search-inline{max-height:none!important}}
+
+/* Details use their content height and keep learning content above source metadata. */
+.detail-sheet{bottom:auto!important;right:90px!important;height:auto!important;width:320px!important;max-width:320px!important;max-height:calc(100dvh - 250px)!important;padding:18px!important;gap:12px!important}
+.detail-sheet.is-wide{width:400px!important;max-width:400px!important;max-height:calc(100dvh - 280px)!important}
+.detail-header{gap:6px;padding-right:18px}.detail-header .structure-title{font-size:23px!important}
+.detail-header .source-name{margin:0;font-size:11px;color:#526270}
+.detail-display-controls{display:flex;align-items:center;gap:4px;margin-top:3px;margin-right:-18px}
+.detail-display-controls button{height:auto;min-height:32px;font-size:11px;font-weight:400;padding:0 5px;color:#435966}
+.detail-display-controls svg.expanded{transform:rotate(180deg)}
+.detail-scroll{flex:0 1 auto;min-height:0;gap:10px}.detail-scroll[hidden]{display:none!important}
+.detail-scroll .structure-description{font-size:13px!important;line-height:1.7}.detail-scroll .context-note{margin:0;color:#526270}
+.detail-scroll .learning-note{margin:0;padding:10px 12px}.detail-scroll .learning-note p{font-size:12px;line-height:1.75}
+.detail-reference{border-top:1px solid var(--border);font-size:12px;color:#526270;flex-shrink:0}
+.detail-reference summary{min-height:36px;display:list-item;align-content:center;cursor:pointer;font-size:11px;color:#435966;list-style-position:inside}
+.detail-reference .structure-meta{padding:10px 0;font-size:10px;gap:22px}.detail-reference .structure-meta strong{font-size:12px}
+.detail-reference .source-link{min-height:36px}.detail-reference .member-list h3{margin:12px 0 4px}
+.detail-actions{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;padding-top:10px}
+.detail-actions .locate-action,.detail-actions .isolate-action{justify-content:center;gap:6px;min-height:44px;height:auto;padding:7px 8px;font-size:11px;white-space:normal;line-height:1.45}
+.locate-action svg{margin-left:0!important}.isolate-action{border-radius:9px;color:#344553;background:#fff}.isolate-action.active{background:#edf1f3;border-color:#536875}
+.detail-actions .secondary-action{grid-column:1/-1;min-height:32px;justify-content:center;color:#435966;font-size:11px}
+.selection-summary{position:absolute;top:105px;right:90px;z-index:20;display:flex;align-items:center;gap:4px;width:320px;max-width:calc(100vw - 24px);padding:6px}
+.selection-summary button{min-height:44px;height:auto;padding:6px 8px;font-size:11px;white-space:normal;color:#435966}
+.selection-summary .selection-open{flex:1;min-width:0;justify-content:flex-start;text-align:left}.selection-open>span{min-width:0;overflow-wrap:anywhere}
+.selection-open small{display:block;font-size:10px;color:#526270}
+@media(min-width:768px) and (min-height:601px){body:has(.detail-sheet.is-compact) .layers-panel{display:flex}}
+@media(max-width:767px){
+ .detail-sheet,.detail-sheet.is-wide,.detail-sheet.is-isolated{top:auto!important;bottom:calc(139px + env(safe-area-inset-bottom))!important;left:max(12px,env(safe-area-inset-left))!important;right:max(12px,env(safe-area-inset-right))!important;width:auto!important;max-width:none!important;max-height:max(300px,min(52dvh,calc(100dvh - 250px)))!important;padding:16px!important}
+ .detail-width-control{display:none!important}.detail-display-controls button{min-height:36px}
+ .detail-actions .secondary-action{min-height:40px}.detail-reference summary{min-height:44px}
+ .selection-summary{top:211px;left:12px;right:12px;width:auto}
+}
+@media(max-height:600px) and (orientation:landscape){
+ .detail-sheet,.detail-sheet.is-wide,.detail-sheet.is-isolated{top:12px!important;bottom:auto!important;left:auto!important;right:max(12px,env(safe-area-inset-right))!important;width:300px!important;max-width:300px!important;max-height:calc(100dvh - 24px)!important;padding:14px!important}
+ .detail-width-control{display:none!important}
+ .selection-summary{top:132px;left:auto;right:12px;width:300px}
+}

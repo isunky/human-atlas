@@ -105,6 +105,22 @@ export const UI_ZH: Record<string, string> = {
   "Show surrounding anatomy": "显示周围结构",
   "Isolate structure": "单独查看结构",
   "Clear selection": "取消选择",
+  "Expand details": "展开详情",
+  "Collapse details": "收起详情",
+  "Close details": "关闭详情",
+  "Selected structure actions": "选中结构操作",
+  "View details": "查看详情",
+  "Compact width": "标准宽度",
+  "Wider reading": "加宽阅读",
+  "Reference & included pieces": "源信息与零件",
+  "Locate structure": "定位到结构",
+  "Back to overview": "返回整体",
+  "Center the camera on the selection; keep surrounding layers":
+    "将相机移向选中结构，保留周围图层；若被遮挡，可单独查看",
+  "Isolate hides other structures; surrounding anatomy restores the current layers":
+    "单独查看会隐藏其他结构；显示周围结构会恢复当前图层",
+  "Clear selection and restore the overview; keep layers and separation":
+    "取消选择并回到整体视角，保留当前图层和分解程度",
   "SOURCE & SCOPE": "来源与范围",
   "A body, revealed.": "探索人体的内部结构",
   "Explore the adult male reference anatomy from BodyParts3D.":

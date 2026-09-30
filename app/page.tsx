@@ -24,6 +24,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   ArrowUpRight,
+  ArrowLeft,
+  ChevronDown,
   ChevronRight,
   Focus,
   Info,
@@ -106,6 +108,19 @@ export default function Home() {
     void openExternal(anchor.href).catch(() => setLinkError(true));
   };
   const detailTitle = useRef<HTMLHeadingElement>(null);
+  const [detailCompact, setDetailCompact] = useState(false);
+  const [detailWide, setDetailWide] = useState(false);
+  const [detailElement, setDetailElement] = useState<HTMLDivElement | null>(null);
+  const [detailLayout, setDetailLayout] = useState("");
+  useEffect(() => {
+    if (!detailElement) return;
+    const observer = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      setDetailLayout(`${Math.round(width)}:${Math.round(height)}`);
+    });
+    observer.observe(detailElement);
+    return () => observer.disconnect();
+  }, [detailElement]);
   const searchInput = useRef<HTMLInputElement>(null);
   const [recentIds, setRecentIds] = useState<string[]>([]);
   const [atlas, setAtlas] = useState<Atlas | null>(null),
@@ -190,7 +205,7 @@ export default function Home() {
   const applyLayers = (visible: SystemId[]) => {
     setDetails(false);
     setChosen(null);
-    setState((s) => ({ ...s, visible, selected: [], isolate: false }));
+    setState((s) => ({ ...s, visible, selected: [], isolate: false, focus: 0 }));
   };
   const selectedParts = state.selected.map((id) => parts.get(id)).filter((p) => !!p),
     selected = selectedParts[0],
@@ -229,9 +244,10 @@ export default function Home() {
   const remember = (id: string) =>
     setRecentIds((ids) => [id, ...ids.filter((existing) => existing !== id)].slice(0, 6));
   const choose = (c: Concept) => {
+    setDetailCompact(false);
     remember(c.id);
     setChosen(c);
-    setState((s) => ({ ...s, selected: c.elements, isolate: false, rotate: false }));
+    setState((s) => ({ ...s, selected: c.elements, isolate: false, rotate: false, focus: 0 }));
     setDetails(true);
     setPanel(null);
   };
@@ -242,9 +258,10 @@ export default function Home() {
   const choosePart = (id: string) => {
     const p = parts.get(id);
     if (!p) return;
+    setDetailCompact(false);
     remember(p.conceptId);
     setChosen({ id: p.conceptId, name: p.name, elements: [id] });
-    setState((s) => ({ ...s, selected: [id], isolate: false, rotate: false }));
+    setState((s) => ({ ...s, selected: [id], isolate: false, rotate: false, focus: 0 }));
     setDetails(true);
     setPanel(null);
   };
@@ -254,6 +271,7 @@ export default function Home() {
       ...s,
       selected: [],
       isolate: false,
+      focus: 0,
       visible: s.visible.includes(id) ? s.visible.filter((x) => x !== id) : [...s.visible, id],
     }));
   };
@@ -268,6 +286,7 @@ export default function Home() {
       ...s,
       view: s.explode > 0.8 ? "front" : initial.view,
       rotate: false,
+      focus: 0,
       reset: s.reset + 1,
     }));
   };
@@ -275,13 +294,30 @@ export default function Home() {
     setDetails(false);
     setPanel((p) => (p === next ? null : next));
   };
+  const returnToOverview = () => {
+    setChosen(null);
+    setDetails(false);
+    setState((s) => ({
+      ...s,
+      selected: [],
+      isolate: false,
+      focus: 0,
+      rotate: false,
+      view: s.explode > 0.8 ? "front" : initial.view,
+      reset: s.reset + 1,
+    }));
+  };
   return (
     <main className="studio" onClick={externalClick}>
       {atlas && (
         <AnatomyScene
           atlas={atlas}
           locale={locale}
-          state={{ ...state, inspectorOpen: details && selectedParts.length > 0 }}
+          state={{
+            ...state,
+            inspectorOpen: details && selectedParts.length > 0,
+            inspectorLayout: detailLayout,
+          }}
           onSelect={choosePart}
           onProgress={(n) => {
             setProgress(n);
@@ -592,7 +628,9 @@ export default function Home() {
             className={state.view === v ? "active" : ""}
             aria-pressed={state.view === v}
             disabled={state.explode > 0.8 && v !== "front"}
-            onClick={() => setState((s) => ({ ...s, view: v, reset: s.reset + 1, rotate: false }))}
+            onClick={() =>
+              setState((s) => ({ ...s, view: v, reset: s.reset + 1, rotate: false, focus: 0 }))
+            }
             title={t(`${v} view`)}
             aria-label={t(`${v} view`)}
           >
@@ -634,6 +672,32 @@ export default function Home() {
         </span>
         <span className="caption-line" />
       </div>
+      {selectedParts.length > 0 && !details && !panel && !about && (
+        <div
+          className="selection-summary glass"
+          role="group"
+          aria-label={t("Selected structure actions")}
+        >
+          <Button
+            variant="ghost"
+            className="selection-open"
+            onClick={() => {
+              setDetailCompact(false);
+              setDetails(true);
+            }}
+          >
+            <Info size={16} />
+            <span>
+              {dn(chosen?.name)}
+              <small>{t("View details")}</small>
+            </span>
+          </Button>
+          <Button variant="ghost" onClick={returnToOverview}>
+            <ArrowLeft size={15} />
+            {t("Back to overview")}
+          </Button>
+        </div>
+      )}
       <div className="bottom-dock glass">
         <Button
           variant="ghost"
@@ -664,6 +728,7 @@ export default function Home() {
                 explode: (Array.isArray(v) ? v[0] : v) / 100,
                 view: (Array.isArray(v) ? v[0] : v) > 80 ? "front" : s.view,
                 rotate: false,
+                focus: 0,
               }))
             }
           />
@@ -731,9 +796,10 @@ export default function Home() {
         onOpenChange={setDetails}
       >
         <SheetContent
-          closeLabel={t("Close")}
+          ref={setDetailElement}
+          closeLabel={t("Close details")}
           initialFocus={detailTitle}
-          className={`detail-sheet glass ${state.isolate ? "is-isolated" : ""}`}
+          className={`detail-sheet glass ${state.isolate ? "is-isolated" : ""} ${detailCompact ? "is-compact" : ""} ${detailWide ? "is-wide" : ""}`}
           showCloseButton={true}
         >
           <div className="detail-header">
@@ -743,8 +809,34 @@ export default function Home() {
               {dn(chosen?.name)}
             </SheetTitle>
             {locale === "zh-CN" && chosen && <p className="source-name">{chosen.name}</p>}
+            <div className="detail-display-controls">
+              <Button
+                variant="ghost"
+                onClick={() => setDetailCompact((compact) => !compact)}
+                aria-expanded={!detailCompact}
+                aria-controls="structure-detail-content"
+              >
+                <ChevronDown size={14} className={detailCompact ? "" : "expanded"} />
+                {detailCompact ? t("Expand details") : t("Collapse details")}
+              </Button>
+              {!detailCompact && (
+                <Button
+                  variant="ghost"
+                  className="detail-width-control"
+                  aria-pressed={detailWide}
+                  onClick={() => setDetailWide((wide) => !wide)}
+                >
+                  {detailWide ? t("Compact width") : t("Wider reading")}
+                </Button>
+              )}
+            </div>
           </div>
-          <div className="detail-scroll" key={`${chosen?.id}-${state.isolate}`}>
+          <div
+            id="structure-detail-content"
+            hidden={detailCompact}
+            className="detail-scroll"
+            key={chosen?.id}
+          >
             <SheetDescription className="structure-description">
               {chosen && selected
                 ? locale === "zh-CN"
@@ -766,59 +858,81 @@ export default function Home() {
                 <p>{chineseStructureKnowledge(chosen.name)!.observe}</p>
               </section>
             )}
-            <div className="structure-meta">
-              <span>
-                {t("Atlas reference")}
-                <strong>{chosen?.id}</strong>
-              </span>
-              <span>
-                {t("Selected pieces")}
-                <strong>{state.selected.length.toLocaleString()}</strong>
-              </span>
-            </div>
-            {selectedParts.length > 1 && (
-              <div className="member-list">
-                <h3>{t("Included structures")}</h3>
-                {selectedParts.slice(0, 50).map((p) => (
-                  <Button variant="ghost" key={p.id} onClick={() => choosePart(p.id)}>
-                    <span>{dn(p.name)}</span>
-                    <ChevronRight size={14} />
-                  </Button>
-                ))}
-                {selectedParts.length > 50 && (
-                  <p>
-                    {t("And {count} more modeled pieces.", { count: selectedParts.length - 50 })}
-                  </p>
-                )}
+            <details className="detail-reference">
+              <summary>{t("Reference & included pieces")}</summary>
+              <div className="structure-meta">
+                <span>
+                  {t("Atlas reference")}
+                  <strong>{chosen?.id}</strong>
+                </span>
+                <span>
+                  {t("Selected pieces")}
+                  <strong>{state.selected.length.toLocaleString()}</strong>
+                </span>
               </div>
-            )}
-            <a
-              className="source-link"
-              href="https://lifesciencedb.jp/bp3d/"
-              target="_blank"
-              rel="noreferrer"
-            >
-              {t("View anatomical source")} <ArrowUpRight size={14} />
-            </a>
+              {selectedParts.length > 1 && (
+                <div className="member-list">
+                  <h3>{t("Included structures")}</h3>
+                  {selectedParts.slice(0, 50).map((p) => (
+                    <Button variant="ghost" key={p.id} onClick={() => choosePart(p.id)}>
+                      <span>{dn(p.name)}</span>
+                      <ChevronRight size={14} />
+                    </Button>
+                  ))}
+                  {selectedParts.length > 50 && (
+                    <p>
+                      {t("And {count} more modeled pieces.", { count: selectedParts.length - 50 })}
+                    </p>
+                  )}
+                </div>
+              )}
+              <a
+                className="source-link"
+                href="https://lifesciencedb.jp/bp3d/"
+                target="_blank"
+                rel="noreferrer"
+              >
+                {t("View anatomical source")} <ArrowUpRight size={14} />
+              </a>
+            </details>
           </div>
           <div className="detail-actions">
             <Button
-              className={`primary-action ${state.isolate ? "active" : ""}`}
-              onClick={() => setState((s) => ({ ...s, isolate: !s.isolate, explode: 0 }))}
+              className="primary-action locate-action"
+              disabled={progress < 100 || !!error}
+              title={t("Center the camera on the selection; keep surrounding layers")}
+              onClick={() => setState((s) => ({ ...s, focus: (s.focus ?? 0) + 1, rotate: false }))}
+            >
+              <Focus size={18} />
+              {t("Locate structure")}
+            </Button>
+            <Button
+              variant="outline"
+              className={`isolate-action ${state.isolate ? "active" : ""}`}
+              title={t(
+                "Isolate hides other structures; surrounding anatomy restores the current layers",
+              )}
+              onClick={() =>
+                setState((s) => ({
+                  ...s,
+                  isolate: !s.isolate,
+                  explode: 0,
+                  focus: 0,
+                  rotate: false,
+                }))
+              }
             >
               <Focus size={18} />
               {state.isolate ? t("Show surrounding anatomy") : t("Isolate structure")}
-              <ChevronRight size={16} />
             </Button>
             <Button
               variant="ghost"
               className="secondary-action"
-              onClick={() => {
-                setState((s) => ({ ...s, selected: [], isolate: false }));
-                setDetails(false);
-              }}
+              title={t("Clear selection and restore the overview; keep layers and separation")}
+              onClick={returnToOverview}
             >
-              {t("Clear selection")}
+              <ArrowLeft size={15} />
+              {t("Back to overview")}
             </Button>
           </div>
         </SheetContent>

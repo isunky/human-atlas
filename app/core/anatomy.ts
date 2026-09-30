@@ -152,6 +152,9 @@ export interface Atlas {
 export type View = "three-quarter" | "front" | "back" | "side";
 export interface SceneState {
   inspectorOpen?: boolean;
+  inspectorLayout?: string;
+  // Nonzero keeps the selection framed; increment to locate it again, zero to leave.
+  focus?: number;
   explode: number;
   visible: SystemId[];
   selected: string[];

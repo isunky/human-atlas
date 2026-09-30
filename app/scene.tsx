@@ -57,7 +57,7 @@ export default function AnatomyScene({
       ready = false,
       lastView = "",
       lastReset = -1,
-      lastIsolate = "",
+      lastSelectionFrame = "",
       layoutKey = "",
       amount = 0;
     let lastState: SceneState | null = null;
@@ -197,6 +197,7 @@ export default function AnatomyScene({
     );
     const spread = atlas.parts.map((part) => directions.get(part.system)!);
     let activeParts: number[] = [],
+      selectedIndices: number[] = [],
       hasSolidParts = false,
       selectedKey = "";
     let packingWidth = 1,
@@ -357,6 +358,8 @@ export default function AnatomyScene({
       }
     })();
     const fit = (view: string, extent = 0) => {
+      camera.clearViewOffset();
+      controls.maxDistance = 40;
       const aspect = camera.aspect,
         mobile = el.clientWidth < 768,
         normalDistance = mobile
@@ -398,6 +401,7 @@ export default function AnatomyScene({
     };
     const resize = () => {
       layoutKey = "";
+      lastSelectionFrame = "";
       lastState = null;
       renderer.setPixelRatio(
         Math.min(devicePixelRatio, el.clientWidth < 768 || el.clientHeight < 600 ? 1.5 : 2),
@@ -503,9 +507,11 @@ export default function AnatomyScene({
         const visible = new Set(s.visible),
           selection = new Set(s.selected);
         activeParts = [];
+        selectedIndices = [];
         hasSolidParts = false;
         atlas.parts.forEach((p, i) => {
           const selected = selection.has(p.id);
+          if (selected) selectedIndices.push(i);
           const shown = s.isolate ? selected : visible.has(p.system) || selected;
           partVisibility[i] = shown ? 1 : 0;
           data[i * 4 + 3] = shown ? 1 : 0;
@@ -583,13 +589,22 @@ export default function AnatomyScene({
       }
       if (moving && !s.isolate)
         fit(amount > 0.5 ? "front" : s.view, Math.max(0, (amount - 0.3) / 0.7));
-      const isolateKey = s.isolate
-        ? selectedKey + ":" + s.reset + ":" + s.inspectorOpen + ":" + camera.aspect
-        : "";
-      if (isolateKey !== lastIsolate || (s.isolate && moving)) {
-        if (s.isolate) {
+      const selectionFrameKey =
+        s.selected.length && (s.isolate || s.focus)
+          ? [
+              selectedKey,
+              s.isolate,
+              s.focus,
+              s.reset,
+              s.inspectorOpen,
+              s.inspectorLayout,
+              camera.aspect,
+            ].join(":")
+          : "";
+      if (selectionFrameKey !== lastSelectionFrame || (selectionFrameKey && moving)) {
+        if (selectionFrameKey) {
           const box = isolationBounds.makeEmpty();
-          activeParts.forEach((i) => {
+          selectedIndices.forEach((i) => {
             box.union(
               worldBox
                 .copy(bounds[i])
@@ -608,18 +623,19 @@ export default function AnatomyScene({
               top = mobile ? 175 : 110,
               bottom = h - 170;
             if (s.inspectorOpen) {
+              const sheet = document.querySelector(".detail-sheet")?.getBoundingClientRect();
               if (landscape) {
-                right = w - 335;
+                right = (sheet?.left ?? w - 319) - 16;
                 top = 100;
                 bottom = h - 125;
               } else if (mobile) {
-                const sheet = document.querySelector(".detail-sheet")?.getBoundingClientRect(),
-                  header = document.querySelector(".identity")?.getBoundingClientRect();
+                const header = document.querySelector(".identity")?.getBoundingClientRect();
                 top = (header?.bottom ?? 94) + 16;
                 bottom = (sheet?.top ?? h * 0.58 - 139) - 16;
               } else {
-                right = w - 370;
-                left = w > 1100 ? 285 : 25;
+                right = (sheet?.left ?? w - 354) - 16;
+                const layers = document.querySelector(".layers-panel")?.getBoundingClientRect();
+                left = layers?.width ? layers.right + 16 : 25;
               }
             }
             const availableWidth = Math.max(150, right - left),
@@ -640,21 +656,21 @@ export default function AnatomyScene({
                 size.z,
               ) /
                 (2 * Math.tan(T.MathUtils.degToRad(camera.fov / 2)))) *
-                1.35,
+                (s.isolate ? 1.35 : 1.7),
             );
             controls.maxDistance = Math.max(40, distance * 2);
+            const direction = s.isolate
+              ? new T.Vector3(0.2, 0.1, 1).normalize()
+              : camera.position.clone().sub(controls.target).normalize();
             controls.target.copy(center);
-            camera.position
-              .copy(center)
-              .add(new T.Vector3(0.2, 0.1, 1).normalize().multiplyScalar(distance));
+            camera.position.copy(center).add(direction.multiplyScalar(distance));
             controls.update();
             dirty = true;
           }
-        } else if (lastIsolate) {
-          camera.clearViewOffset();
+        } else if (lastSelectionFrame) {
           fit(s.view, amount);
         }
-        lastIsolate = isolateKey;
+        lastSelectionFrame = selectionFrameKey;
       }
       controls.enableRotate = amount < 0.8;
       controls.mouseButtons.LEFT = amount < 0.8 ? T.MOUSE.ROTATE : T.MOUSE.PAN;
